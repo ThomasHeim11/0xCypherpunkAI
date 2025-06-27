@@ -265,7 +265,6 @@ For questions or support regarding this ElizaOS AI Agent Prize submission:
 
 - **Issues**: Use the GitHub Issues tab
 - **Discussions**: Use GitHub Discussions for questions
-- **Email**: [your-email@example.com]
 
 ---
 
