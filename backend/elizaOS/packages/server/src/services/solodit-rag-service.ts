@@ -17,9 +17,14 @@ export interface SoloditRAGContext {
 export class SoloditRAGService extends Service {
   public static serviceType = 'SOLODIT_RAG';
 
+  // Shared static cache to prevent re-loading for every agent
+  private static sharedContext: SoloditRAGContext | null = null;
+  private static sharedKnowledgeBase = new Map<string, any>();
+  private static isSharedInitialized = false;
+  private static initializationPromise: Promise<void> | null = null;
+
   private context: SoloditRAGContext | null = null;
   private knowledgeBase: Map<string, any> = new Map();
-  private isInitialized = false;
 
   constructor(runtime?: IAgentRuntime) {
     super(runtime);
@@ -46,40 +51,62 @@ export class SoloditRAGService extends Service {
 
   async stop(): Promise<void> {
     logger.info('🧠 Solodit RAG Service stopped');
-    this.knowledgeBase.clear();
+    // No need to clear shared knowledge base, it's shared
   }
 
   async initializeRAGData(): Promise<void> {
-    if (this.isInitialized) return;
-
-    try {
-      logger.info('🧠 Initializing Solodit RAG data for AI agents...');
-
-      // Load existing scraped data if available
-      await this.loadExistingData();
-
-      // If no data or data is old, perform scraping
-      if (!this.context || this.needsUpdate()) {
-        logger.warn('📊 Fresh data needed - run comprehensive scraper first');
-        logger.info('💡 Run: bun run scrape-solodit-comprehensive');
-      }
-
-      // Index data for RAG
-      await this.indexDataForRAG();
-
-      this.isInitialized = true;
-      logger.info('✅ Solodit RAG data ready for AI agents');
-    } catch (error) {
-      logger.error('❌ Failed to initialize Solodit RAG data:', error);
-      // Don't throw - allow service to continue with reduced functionality
+    if (SoloditRAGService.isSharedInitialized) {
+      this.context = SoloditRAGService.sharedContext;
+      this.knowledgeBase = SoloditRAGService.sharedKnowledgeBase;
+      logger.info('✅ Solodit RAG data initialized from shared cache.');
+      return;
     }
+
+    if (SoloditRAGService.initializationPromise) {
+      await SoloditRAGService.initializationPromise;
+      this.context = SoloditRAGService.sharedContext;
+      this.knowledgeBase = SoloditRAGService.sharedKnowledgeBase;
+      logger.info('✅ Solodit RAG data initialized from shared cache.');
+      return;
+    }
+
+    const doInit = async () => {
+      try {
+        logger.info('🧠 Initializing Solodit RAG data for AI agents...');
+
+        // Load existing scraped data if available
+        await this.loadExistingData();
+
+        // If no data or data is old, perform scraping
+        if (!this.context || this.needsUpdate()) {
+          logger.warn('📊 Fresh data needed - run comprehensive scraper first');
+          logger.info('💡 Run: bun run scrape-solodit-comprehensive');
+        }
+
+        // Index data for RAG
+        await this.indexDataForRAG();
+
+        // Set shared static data
+        SoloditRAGService.sharedContext = this.context;
+        SoloditRAGService.sharedKnowledgeBase = this.knowledgeBase;
+        SoloditRAGService.isSharedInitialized = true;
+        logger.info('✅ Solodit RAG data ready for AI agents');
+      } catch (error) {
+        logger.error('❌ Failed to initialize Solodit RAG data:', error);
+        SoloditRAGService.initializationPromise = null;
+        // Don't throw - allow service to continue with reduced functionality
+      }
+    };
+
+    SoloditRAGService.initializationPromise = doInit();
+    await SoloditRAGService.initializationPromise;
   }
 
   private async loadExistingData(): Promise<void> {
     try {
       const summaryPath = path.join(
         process.cwd(),
-        'data/solodit_comprehensive/comprehensive_summary.json'
+        'scripts/data/solodit_comprehensive/comprehensive_summary.json'
       );
       const summaryData = await fs.readFile(summaryPath, 'utf-8');
       const summary = JSON.parse(summaryData);
@@ -113,7 +140,7 @@ export class SoloditRAGService extends Service {
     logger.info('🔍 Indexing Solodit data for RAG queries...');
 
     try {
-      const dataDir = path.join(process.cwd(), 'data/solodit_comprehensive');
+      const dataDir = path.join(process.cwd(), 'scripts/data/solodit_comprehensive');
 
       // Load the vulnerability knowledge base
       const vulnKnowledgePath = path.join(dataDir, 'vulnerability_knowledge_base.txt');
@@ -152,6 +179,10 @@ export class SoloditRAGService extends Service {
     const protocolIndex = new Map<string, any[]>();
     const severityIndex = new Map<string, any[]>();
 
+    const totalReports = reports.length;
+    let processedCount = 0;
+    let nextLogPercentage = 1;
+
     for (const report of reports) {
       // Vulnerability type indexing
       if (report.vulnerabilities && Array.isArray(report.vulnerabilities)) {
@@ -177,6 +208,16 @@ export class SoloditRAGService extends Service {
           severityIndex.set(report.severity, []);
         }
         severityIndex.get(report.severity)!.push(report);
+      }
+
+      processedCount++;
+      const percentage = Math.round((processedCount / totalReports) * 100);
+
+      if (percentage >= nextLogPercentage) {
+        logger.info(
+          `🧠 Solodit RAG indexing progress: ${percentage}% (${processedCount}/${totalReports})`
+        );
+        nextLogPercentage = percentage + 1;
       }
     }
 
@@ -299,4 +340,3 @@ export class SoloditRAGService extends Service {
 }
 
 export default SoloditRAGService;
- 

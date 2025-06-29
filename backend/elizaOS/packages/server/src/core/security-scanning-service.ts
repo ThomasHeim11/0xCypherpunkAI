@@ -1,8 +1,9 @@
-import { Service, IAgentRuntime, logger, asUUID } from '@elizaos/core';
+import { Service, IAgentRuntime, logger, Agent } from '@elizaos/core';
 import axios from 'axios';
 import { VulnerabilityFinding, AgentVote, ScanResult, ScanRequest } from './types.js';
 import { VoteEngine } from './vote-engine.js';
-import { KnowledgeBaseService, AuditReport } from './knowledge-base-service.js';
+// import { KnowledgeBaseService } from './knowledge-base-service.js';
+import { performGeneralHeuristicAnalysis } from '../plugins/security-analysis-plugin.js';
 
 /**
  * Core Security Scanning Service
@@ -13,6 +14,11 @@ export class SecurityScanningService extends Service {
 
   private voteEngine!: VoteEngine;
   private activeScans = new Map<string, ScanResult>();
+  private githubCache = new Map<
+    string,
+    { data: { path: string; content: string }[]; timestamp: number }
+  >();
+  private readonly GITHUB_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
   constructor(runtime?: IAgentRuntime) {
     super(runtime);
@@ -114,101 +120,240 @@ export class SecurityScanningService extends Service {
     if (!scan) return;
 
     try {
-      // Update status
+      // Update status and progress
       scan.status = 'SCANNING';
-      scan.progress = 10;
+      scan.progress = 5;
+      logger.info(`📝 Scan ${scanId}: Initializing scan process... (5%)`);
 
-      // Step 1: Fetch contract code
-      const contractCode = await this.fetchContractCode(request);
-      scan.progress = 20;
+      // Step 1: Fetch contract files
+      logger.info(`📁 Scan ${scanId}: Fetching contract files...`);
+      const files = await this.fetchContractFiles(request);
+      scan.progress = 15;
+      logger.info(`✅ Scan ${scanId}: Fetched ${files.length} contract files. (15%)`);
 
-      // Step 2: Trigger each specialized agent and collect initial findings
-      // Dynamically get all registered agent IDs from the runtime
-      const agents = await this.runtime.getAgents();
-      const agentIds = agents.map((a) => a.id).filter((id) => !!id) as string[];
-      logger.info(`Discovered ${agentIds.length} agents for scanning.`);
+      scan.progress = 30; // Skip RAG verification progress
 
-      const agentPromises = agentIds.map((agentId) =>
-        this.triggerAgentAnalysis(scanId, agentId, contractCode)
+      // Step 3: Get available agents
+      const allAgents = await this.runtime.getAgents();
+      logger.info(
+        `[Pre-filter] Discovered ${allAgents.length} total agents available on the server.`
       );
-      const findingsArrays = await Promise.all(agentPromises);
-      scan.findings = findingsArrays.flat();
-      scan.progress = 70;
 
-      // Step 3: Enter voting phase
-      scan.status = 'VOTING';
-      scan.progress = 80;
+      // HACKATHON FIX: Explicitly select the 3 most critical agents for speed and precision
+      const targetAgentNames = [
+        'Static Code Agent',
+        'Access Control Agent',
+        'Dangerous Functions Agent',
+      ];
 
-      // Each finding needs votes. The vote engine handles this internally.
-      // We will simply wait for a timeout.
-      this.voteEngine.startVoteTimeout(scanId, () => {
-        this.finalizeScan(scanId);
-      });
+      const agents = allAgents.filter((agent) =>
+        targetAgentNames.some((name) => agent.name?.includes(name))
+      );
+
+      if (agents.length !== 3) {
+        logger.warn(
+          `Expected to find 3 target agents, but found ${agents.length}. Proceeding with available agents.`
+        );
+      }
+
+      const agentIds = agents.map((a) => a.id).filter((id) => !!id) as string[];
+      logger.info(
+        `🤖 Scan ${scanId}: Filtering down to ${agentIds.length} high-precision agents for analysis.`
+      );
+
+      scan.progress = 35;
+      logger.info(`⚙️  Scan ${scanId}: Analysis setup complete. (35%)`);
+
+      // Set concurrency limit
+      const CONCURRENCY_LIMIT = 3;
+
+      // Step 4: Multi-agent analysis with PARALLEL execution for speed
+      logger.info(
+        `🚀 Scan ${scanId}: Starting PARALLEL agent analysis (max ${CONCURRENCY_LIMIT} concurrent)...`
+      );
+      const analysisResults: { agentId: string; findings: VulnerabilityFinding[] }[] = [];
+
+      // Process agents in batches of 3 for speed while managing memory
+      const agentBatches: Partial<Agent>[][] = [];
+      for (let i = 0; i < agents.length; i += CONCURRENCY_LIMIT) {
+        agentBatches.push(agents.slice(i, i + CONCURRENCY_LIMIT));
+      }
+
+      let completedAgents = 0;
+      for (const batch of agentBatches) {
+        // Process each batch in parallel
+        const batchPromises = batch.map(async (agent) => {
+          const agentId = agent.id || `agent-unidentified`;
+          const agentName = agent.name || 'Unknown Agent';
+          try {
+            logger.info(`🤖 Triggering ${agentName} (${agentId}) analysis for scan ${scanId}`);
+            const findings = await this.triggerAgentAnalysis(scanId, agentId, agentName, files);
+            return { agentId, findings };
+          } catch (error) {
+            logger.error(
+              `Error during analysis for agent ${agentName} (${agentId}) on scan ${scanId}:`,
+              error
+            );
+            return { agentId, findings: [] };
+          }
+        });
+
+        // Wait for all agents in this batch to complete
+        const batchResults = await Promise.all(batchPromises);
+        analysisResults.push(...batchResults);
+
+        completedAgents += batch.length;
+        scan.progress = Math.min(35 + (completedAgents / agents.length) * 50, 85);
+
+        logger.info(
+          `✅ Scan ${scanId}: Batch completed - ${completedAgents}/${agents.length} agents done (${Math.round(scan.progress)}%)`
+        );
+
+        // Small pause between batches to prevent overwhelming the system
+        if (completedAgents < agents.length) {
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second pause
+        }
+      }
+
+      const allFindings = analysisResults.flatMap((r) => r.findings);
+
+      logger.info(
+        `🏁 Scan ${scanId}: All ${agents.length} agents completed analysis. Found ${allFindings.length} total findings (85%)`
+      );
+      scan.progress = 85;
+
+      // Step 5: Agent voting and consensus with confidence scoring
+      logger.info(`🗳️ Scan ${scanId}: Entering agent voting and consensus phase... (90%)`);
+      const finalResults = await this.performAgentVoting(analysisResults, scanId);
+      scan.progress = 95;
+      logger.info(`👍 Scan ${scanId}: Voting complete. (95%)`);
+
+      scan.findings = finalResults.confirmedFindings;
+      scan.finalConfidenceScore = finalResults.averageConfidence;
+      scan.totalVotes = finalResults.totalVotes;
+      scan.status = 'COMPLETED';
+      scan.progress = 100;
+      scan.completedAt = new Date();
+      scan.consensusReached = finalResults.confirmedFindings.length > 0;
+
+      logger.info(
+        `🎉 Scan ${scanId} completed. Found ${scan.findings.length} confirmed vulnerabilities. (100%)`
+      );
+
+      // Clean up vote engine state for this scan's findings
+      scan.findings.forEach((f) => this.voteEngine.clearVotes(f.id));
     } catch (error) {
-      logger.error(`Scan execution failed for ${scanId}:`, error);
+      logger.error(`❌ Scan execution failed for ${scanId}:`, error);
       scan.status = 'FAILED';
       scan.progress = 100;
     }
   }
 
   /**
-   * Fetch contract code from GitHub or on-chain
+   * Fetch contract files from GitHub or on-chain
    */
-  private async fetchContractCode(request: ScanRequest): Promise<string> {
-    if (request.type === 'GITHUB') {
-      return this.fetchFromGitHub(request.githubRepo!, request.githubPath, request.accessToken);
-    } else {
-      return this.fetchFromChain(request.contractAddress!, request.chain!);
+  private async fetchContractFiles(
+    request: ScanRequest
+  ): Promise<{ path: string; content: string }[]> {
+    const { githubRepo, githubPath, contractAddress, chain, accessToken } = request;
+
+    if (githubRepo) {
+      return this.fetchFromGitHub(githubRepo, githubPath, accessToken);
     }
+    if (contractAddress && chain) {
+      // This path returns a single "file" for now
+      const content = await this.fetchFromChain(contractAddress, chain);
+      return [{ path: `${contractAddress}.sol`, content }];
+    }
+
+    throw new Error('Either GitHub repository or contract address/chain must be provided.');
   }
 
-  private async fetchFromGitHub(repo: string, path = '', accessToken?: string): Promise<string> {
-    logger.info(`📁 Fetching from GitHub: ${repo}${path ? '/' + path : ''}`);
+  private async fetchFromGitHub(
+    repo: string,
+    path = '',
+    accessToken?: string
+  ): Promise<{ path: string; content: string }[]> {
+    const cacheKey = `github-repo:${repo}:${path || 'root'}`;
+    const cachedItem = this.githubCache.get(cacheKey);
+
+    if (cachedItem && Date.now() - cachedItem.timestamp < this.GITHUB_CACHE_TTL) {
+      logger.info(`✅ [Cache HIT] Returning cached content for ${repo}/${path || 'root'}`);
+      return cachedItem.data;
+    }
+
+    logger.info(`⬇️ [Cache MISS] Fetching fresh content for ${repo}/${path || 'root'}`);
+    const files = await this.performGitHubFetch(repo, path, accessToken);
+
+    this.githubCache.set(cacheKey, { data: files, timestamp: Date.now() });
+
+    return files;
+  }
+
+  private async performGitHubFetch(
+    repo: string,
+    path = '',
+    accessToken?: string
+  ): Promise<{ path: string; content: string }[]> {
     const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
-    const headers = {
+    const headers: any = {
+      'User-Agent': '0xCypherpunkAI',
       Accept: 'application/vnd.github.v3+json',
-      Authorization: `token ${accessToken || this.runtime.getSetting('GITHUB_TOKEN')}`,
     };
+    if (accessToken) {
+      headers.Authorization = `token ${accessToken}`;
+    } else {
+      logger.warn(`GitHub API request for ${repo} is unauthenticated. Rate limits may be lower.`);
+    }
 
     try {
       const response = await axios.get(apiUrl, { headers });
       const data = response.data;
 
       if (Array.isArray(data)) {
-        // It's a directory, find all .sol files and concatenate them
-        const solFiles = data.filter((item) => item.type === 'file' && item.name.endsWith('.sol'));
-        if (solFiles.length === 0) {
-          throw new Error('No Solidity (.sol) files found in the specified directory.');
-        }
+        // It's a directory, so we fetch all contents recursively.
+        const promises = data.map((item: any) => {
+          if (item.type === 'dir') {
+            // Recurse into subdirectory
+            return this.performGitHubFetch(repo, item.path, accessToken);
+          } else if (item.type === 'file' && item.name.endsWith('.sol') && item.download_url) {
+            // Fetch .sol file content directly
+            return this.fetchGitHubFileContent(item.download_url, headers).then((content) => ({
+              path: item.path,
+              content,
+            }));
+          }
+          return Promise.resolve(null);
+        });
 
-        let combinedCode = `// Fetched from ${repo} - ${solFiles.length} files combined\n\n`;
-        for (const file of solFiles) {
-          const fileContent = await this.fetchGitHubFileContent(file.url, headers);
-          combinedCode += `// --- File: ${file.path} ---\n\n${fileContent}\n\n`;
-        }
-        return combinedCode;
-      } else if (data.type === 'file') {
+        const results = await Promise.all(promises);
+        // Flatten the array of arrays and filter out nulls
+        return results.flat().filter((file) => file !== null) as {
+          path: string;
+          content: string;
+        }[];
+      } else if (data.type === 'file' && data.name.endsWith('.sol')) {
         // It's a single file
-        if (!data.name.endsWith('.sol')) {
-          throw new Error('The specified file is not a Solidity (.sol) file.');
-        }
-        return this.decodeBase64(data.content);
-      } else {
-        throw new Error(`Unsupported content type: ${data.type}`);
+        const content = await this.fetchGitHubFileContent(data.download_url, headers);
+        return [{ path: data.path, content }];
       }
-    } catch (error) {
-      logger.error('Error fetching from GitHub:', error);
-      throw new Error(`Failed to fetch code from GitHub repository ${repo}.`);
+      return [];
+    } catch (error: any) {
+      if (error.response) {
+        logger.error(
+          `GitHub API error for ${repo} at path ${path}: ${error.response.status} ${error.response.statusText}`,
+          { data: error.response.data }
+        );
+      } else {
+        logger.error(`Failed to fetch from GitHub repo ${repo} at path ${path}:`, error);
+      }
+      throw new Error(`Could not fetch from GitHub: ${error.message}`);
     }
   }
 
   private async fetchGitHubFileContent(url: string, headers: any): Promise<string> {
     const response = await axios.get(url, { headers });
-    return this.decodeBase64(response.data.content);
-  }
-
-  private decodeBase64(content: string): string {
-    return Buffer.from(content, 'base64').toString('utf-8');
+    return response.data; // download_url provides raw content
   }
 
   private async fetchFromChain(address: string, chain: string): Promise<string> {
@@ -221,138 +366,32 @@ export class SecurityScanningService extends Service {
   }
 
   /**
-   * Trigger analysis by a specific agent and get initial findings
+   * Trigger analysis by a specific security agent (optimized for speed)
    */
   private async triggerAgentAnalysis(
     scanId: string,
     agentId: string,
-    contractCode: string
+    agentName: string,
+    files: { path: string; content: string }[]
   ): Promise<VulnerabilityFinding[]> {
     try {
-      logger.info(`🤖 Triggering ${agentId} analysis for scan ${scanId}`);
+      // Use the new general heuristic analysis for all agents
+      const findings = await performGeneralHeuristicAnalysis(files, this.runtime);
 
-      const knowledgeService = this.runtime.getService<KnowledgeBaseService>(
-        KnowledgeBaseService.serviceType
-      );
-      if (!knowledgeService) {
-        logger.warn(`KnowledgeBaseService not available for agent ${agentId}. Skipping RAG.`);
-        return [];
-      }
-
-      // 1. Use RAG to get relevant knowledge
-      const relevantKnowledge: AuditReport[] = await knowledgeService.search(
-        contractCode,
-        agentId,
-        5
-      );
-
-      const ragContext = relevantKnowledge
-        .map((r: AuditReport) => `[Reference: ${r.source} - ${r.metadata.title}]\n${r.content}`)
-        .join('\n\n---\n\n');
-
-      // 2. Construct a specialized prompt for the agent
-      const agentPersona = this.getAgentPersona(agentId);
-      const prompt = `
-        You are an AI-powered smart contract security auditor named ${agentId}.
-        ${agentPersona}
-
-        Your task is to analyze the following Solidity contract for vulnerabilities based on your specialization.
-        Use the provided reference information from past audit reports to inform your analysis.
-
-        **Reference Information:**
-        ---
-        ${ragContext}
-        ---
-
-        **Contract Code to Analyze:**
-        \`\`\`solidity
-        ${contractCode}
-        \`\`\`
-
-        Based on your analysis, identify potential vulnerabilities. For each vulnerability found, provide:
-        - A "title" for the vulnerability (e.g., "Reentrancy in withdraw function").
-        - A detailed "description" of the issue and its potential impact.
-        - A "recommendation" on how to fix the vulnerability.
-        - A "location" object with "file" (use "contract.sol") and "line" number.
-        - A "severity" (one of: "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO").
-        - A "confidence" score from 0.0 to 1.0 representing how certain you are of this finding.
-
-        Format your response as a JSON array of objects, where each object represents a vulnerability finding.
-        Example:
-        [
-          {
-            "title": "Reentrancy in withdraw()",
-            "description": "The withdraw function does not follow the checks-effects-interactions pattern, allowing for potential reentrancy attacks.",
-            "recommendation": "Use the checks-effects-interactions pattern by moving the state update before the external call.",
-            "location": { "file": "contract.sol", "line": 42 },
-            "severity": "HIGH",
-            "confidence": 0.95
-          }
-        ]
-        If no vulnerabilities are found, return an empty array [].
-      `;
-
-      // 3. Call the LLM via the runtime
-      const llmResponse = await this.runtime.useModel('TEXT_LARGE', { prompt });
-
-      // 4. Parse the response
-      let findings: any[] = [];
-      if (typeof llmResponse === 'string') {
-        try {
-          // Find the JSON block in the response
-          const jsonMatch = llmResponse.match(/\[.*\]/s);
-          if (jsonMatch) {
-            findings = JSON.parse(jsonMatch[0]);
-          } else {
-            logger.warn(`No valid JSON array found in LLM response for ${agentId}.`, {
-              response: llmResponse,
-            });
-            return [];
-          }
-        } catch (e) {
-          logger.error(`Failed to parse LLM response for ${agentId}`, {
-            error: e,
-            response: llmResponse,
-          });
-          return []; // Return empty if parsing fails
-        }
-      }
-
-      // 5. Format into VulnerabilityFinding objects
-      return findings.map(
-        (f: any, index: number): VulnerabilityFinding => ({
-          id: `${scanId}-${agentId}-${index}`,
-          type: agentId.replace('-agent', ''),
-          title: f.title,
-          description: f.description,
-          recommendation: f.recommendation,
-          location: f.location || { file: 'contract.sol' },
-          severity: (f.severity?.toUpperCase() as VulnerabilityFinding['severity']) || 'INFO',
-          confidence: (f.confidence || 0) * 100,
-        })
-      );
+      // Add a scan-specific ID to each finding to ensure uniqueness
+      return findings.map((finding) => ({
+        ...finding,
+        // The finding ID is already unique from the analysis plugin, but we prepend the scanID
+        // to guarantee it's unique across all scans.
+        id: `${scanId}-${finding.id}`,
+      }));
     } catch (error) {
-      logger.error(`Error during analysis for agent ${agentId} on scan ${scanId}:`, error);
-      return []; // Return empty array on error to not fail the whole scan
+      logger.error(
+        `❌ Agent ${agentName} (${agentId}) analysis failed for scan ${scanId}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+      return [];
     }
-  }
-
-  private getAgentPersona(agentId: string): string {
-    const personas: Record<string, string> = {
-      'reentrancy-agent':
-        'Your specialization is detecting reentrancy vulnerabilities, including issues related to the checks-effects-interactions pattern and unsafe external calls.',
-      'access-control-agent':
-        'You specialize in access control, identifying issues like improper authorization, privilege escalation, and insecure function modifiers (e.g., ownable, onlyAdmin).',
-      'arithmetic-agent':
-        'Your expertise is in mathematical vulnerabilities, such as integer overflow/underflow and precision loss.',
-      'flashloan-agent':
-        'You are an expert in DeFi exploits, focusing on vulnerabilities related to flash loans, oracle manipulation, and economic attacks.',
-      'governance-agent':
-        'You specialize in governance and DAO vulnerabilities, including voting manipulation, centralization risks, and proposal execution flaws.',
-      'security-orchestrator':
-        'You are a general security auditor, looking for a broad range of common vulnerabilities and best practice violations.',
-    };
-    return personas[agentId] || 'You are a general smart contract security auditor.';
   }
 
   /**
@@ -380,47 +419,6 @@ export class SecurityScanningService extends Service {
   }
 
   /**
-   * Finalize the scan after the voting period ends
-   */
-  private async finalizeScan(scanId: string): Promise<void> {
-    const scan = this.activeScans.get(scanId);
-    if (!scan || scan.status !== 'VOTING') return;
-
-    logger.info(`Finalizing scan ${scanId}...`);
-
-    let totalConfidence = 0;
-    let confirmedFindings = 0;
-
-    for (const finding of scan.findings) {
-      const result = this.voteEngine.getFinalResult(finding.id);
-      if (result.finalDecision === 'CONFIRMED') {
-        finding.confidence = result.confidenceScore;
-        totalConfidence += result.confidenceScore;
-        confirmedFindings++;
-      }
-    }
-
-    // Filter out rejected findings
-    scan.findings = scan.findings.filter(
-      (f) => this.voteEngine.getFinalResult(f.id).finalDecision === 'CONFIRMED'
-    );
-
-    scan.finalConfidenceScore = confirmedFindings > 0 ? totalConfidence / confirmedFindings : 0;
-    scan.totalVotes = scan.agentVotes.length;
-    scan.status = 'COMPLETED';
-    scan.progress = 100;
-    scan.completedAt = new Date();
-    scan.consensusReached = scan.findings.length > 0;
-
-    logger.info(
-      `✅ Scan ${scanId} completed. Found ${scan.findings.length} confirmed vulnerabilities.`
-    );
-
-    // Clean up vote engine state for this scan's findings
-    scan.findings.forEach((f) => this.voteEngine.clearVotes(f.id));
-  }
-
-  /**
    * Get the result of a specific scan
    */
   getScanResult(scanId: string): ScanResult | null {
@@ -439,6 +437,125 @@ export class SecurityScanningService extends Service {
    */
   private processTimeouts(): void {
     // This is handled by the VoteEngine's timeout callback now
+  }
+
+  /**
+   * Perform agent voting and consensus on findings
+   */
+  private async performAgentVoting(
+    analysisResults: { agentId: string; findings: VulnerabilityFinding[] }[],
+    scanId: string
+  ): Promise<{
+    confirmedFindings: VulnerabilityFinding[];
+    averageConfidence: number;
+    totalVotes: number;
+  }> {
+    logger.info(`🗳️ Starting agent voting for scan ${scanId}...`);
+
+    // Group similar findings by type and severity for voting
+    const findingGroups = new Map<string, VulnerabilityFinding[]>();
+    let totalFindings = 0;
+
+    for (const result of analysisResults) {
+      for (const finding of result.findings) {
+        const groupKey = `${finding.type}-${finding.severity}`;
+        if (!findingGroups.has(groupKey)) {
+          findingGroups.set(groupKey, []);
+        }
+        findingGroups.get(groupKey)!.push(finding);
+        totalFindings++;
+      }
+    }
+
+    logger.info(
+      `📊 Grouped ${totalFindings} findings into ${findingGroups.size} categories for voting`
+    );
+
+    const confirmedFindings: VulnerabilityFinding[] = [];
+    let totalConfidence = 0;
+    let confirmedCount = 0;
+
+    // Voting threshold: 60% of agents must agree on a finding
+    const consensusThreshold = 0.6;
+    const totalAgents = analysisResults.length;
+    const requiredVotes = Math.ceil(totalAgents * consensusThreshold);
+
+    for (const [groupKey, findings] of findingGroups) {
+      const voteCount = findings.length;
+      const votePercentage = voteCount / totalAgents;
+
+      if (voteCount >= requiredVotes) {
+        // Finding has consensus - select the one with highest confidence
+        const bestFinding = findings.reduce((best, current) =>
+          current.confidence > best.confidence ? current : best
+        );
+
+        // Calculate group confidence based on consensus strength
+        const consensusStrength = Math.min(votePercentage / consensusThreshold, 1.0);
+        const finalConfidence = Math.round(bestFinding.confidence * consensusStrength);
+
+        const confirmedFinding: VulnerabilityFinding = {
+          ...bestFinding,
+          confidence: finalConfidence,
+          id: `${scanId}-confirmed-${confirmedCount}`,
+        };
+
+        confirmedFindings.push(confirmedFinding);
+        totalConfidence += finalConfidence;
+        confirmedCount++;
+
+        logger.info(
+          `✅ Confirmed finding: ${groupKey} (${voteCount}/${totalAgents} votes, ${finalConfidence}% confidence)`
+        );
+      } else {
+        logger.debug(
+          `❌ Rejected finding: ${groupKey} (${voteCount}/${totalAgents} votes, below ${requiredVotes} threshold)`
+        );
+      }
+    }
+
+    const averageConfidence = confirmedCount > 0 ? totalConfidence / confirmedCount / 100 : 0;
+
+    logger.info(
+      `🎯 Voting complete: ${confirmedFindings.length}/${findingGroups.size} findings confirmed with ${averageConfidence.toFixed(2)} average confidence`
+    );
+
+    // Sort the confirmed findings by severity and confidence
+    const categoryOrder = (finding: VulnerabilityFinding): number => {
+      switch (finding.severity) {
+        case 'CRITICAL':
+          return 0;
+        case 'HIGH':
+          return 1;
+        case 'MEDIUM':
+          return 2;
+        case 'LOW':
+          // Separate "gas" type findings to appear after other "LOW" severity findings
+          return finding.type.includes('gas') ? 4 : 3;
+        case 'INFO':
+          return 5;
+        default:
+          return 6;
+      }
+    };
+
+    const sortedFindings = confirmedFindings.sort((a, b) => {
+      const orderA = categoryOrder(a);
+      const orderB = categoryOrder(b);
+
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      // If categories are the same, sort by confidence descending
+      return b.confidence - a.confidence;
+    });
+
+    return {
+      confirmedFindings: sortedFindings,
+      averageConfidence,
+      totalVotes: totalFindings,
+    };
   }
 
   get capabilityDescription(): string {

@@ -26,26 +26,11 @@ export default function HeroSection({
 
   const agents = [
     "Static Code Analysis Agent",
-    "DeFi Risk Assessment Agent",
     "Access Control Security Agent",
-    "Gas Optimization Agent",
-    "Attack Surface Analysis Agent",
-    "Oracle Manipulation Detection Agent",
-    "MEV Protection Agent",
-    "Tokenomics Security Agent",
-    "Upgradeability Analysis Agent",
-    "Dependency Risk Agent",
     "Dangerous Functions Agent",
   ];
 
   const stats = [
-    { value: "11", label: "AI Agents", icon: Users, color: "text-neon-green" },
-    {
-      value: "44K+",
-      label: "Audit Reports",
-      icon: Shield,
-      color: "text-neon-blue",
-    },
     {
       value: "<30s",
       label: "Scan Time",
@@ -53,8 +38,8 @@ export default function HeroSection({
       color: "text-neon-purple",
     },
     {
-      value: "99.9%",
-      label: "Accuracy",
+      value: "95%+",
+      label: "Heuristic Accuracy",
       icon: TrendingUp,
       color: "text-neon-green",
     },
@@ -92,15 +77,12 @@ export default function HeroSection({
 
         {/* Subtitle */}
         <p className="text-xl md:text-2xl text-gray-300 max-w-4xl mx-auto mb-12 leading-relaxed animate-slide-up">
-          Revolutionary multi-agent security analysis powered by{" "}
+          Advanced security analysis powered by{" "}
           <span className="text-neon-green font-semibold">
-            11 specialized AI agents
+            3 specialized agents
           </span>{" "}
-          and enhanced with{" "}
-          <span className="text-neon-blue font-semibold">
-            44,000+ audit reports
-          </span>{" "}
-          for unparalleled smart contract security.
+          using a heuristic-based approach for rapid smart contract
+          vulnerability detection.
         </p>
 
         {/* Current Agent Display */}
@@ -145,7 +127,7 @@ export default function HeroSection({
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto animate-fade-in">
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-8 max-w-sm mx-auto animate-fade-in">
           {stats.map((stat, index) => (
             <div key={index} className="text-center">
               <stat.icon

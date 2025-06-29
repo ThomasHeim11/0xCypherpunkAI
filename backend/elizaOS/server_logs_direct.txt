@@ -1,0 +1,150 @@
+
+[38;5;27m────────────────────────────────────────────────────────────────────[0m
+[38;5;27m│[38;5;208m [1mUpdate available:[0m[38;5;208m 1.0.12 → [38;5;46m[1m1.0.14[0m[38;5;208m                                [38;5;27m│[0m
+[38;5;27m│[38;5;208m Run [38;5;46m[1mbun i -g @elizaos/cli@latest[0m[38;5;208m to get the latest features      [38;5;27m│[0m
+[38;5;27m────────────────────────────────────────────────────────────────────[0m
+
+
+[38;5;27m⠀⠀⠀⠀⠀⠀⠀⠀⢀⣐⣿⣿⢰⡀⠀⠀⠀[38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+[38;5;27m⠀⠀⠀⠀⠀⢀⣴⠤⠾⠛⠛⣿⣶⣇⠀⠀⡆[38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+[38;5;27m⢰⣋⡳⡄⠀⢨⣭⡀⠀⡤⠀⣀⣝⢿⣶⣿⡅[38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+[38;5;27m⢸⣯⠀⣇⠀⣼⣿⣿⣆⢷⣴⣿⣿⡏⣛⡉⠀[38;5;255m ⢸⣿⣿⣿⣿⣿⣿⢸⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⣾⣿⣿⣧⠀⠀⠀[38;5;255m⢸⠟⢀⣴⣿⣿⣿⣿⣦⡀⣠⣾⣿⣿⣿⣿⣦⡙⢿[0m
+[38;5;27m⠀⠙⢷⣮⢸⣿⣿⣿⣿⣷⣯⣟⣏⣼⣷⣅⠾[38;5;255m ⢸⣿⣇⣀⣀⣀⠀⢸⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⠀⠀⠀⣠⣿⣿⠟⠁⠀⠀⣼⣿⡟⣿⣿⣆⠀⠀[38;5;255m⠀⠀⣿⣿⠋⠀⠈⠻⣿⡇⣿⣿⣅⣀⣀⡛⠛⠃⠀[0m
+[38;5;27m⠀⠀⠀⠁⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠋⠀[38;5;255m ⢸⣿⡿⠿⠿⠿⠀⢸⣿⣿⠀⠀⠀⠀⠀⣿⣿⡇⠀⣠⣾⣿⠟⠁⠀⠀⠀⣰⣿⣿⣁⣸⣿⣿⡄⠀[38;5;255m⠀⠀⣿⣿ ⠀⠀ ⣿⣿⢈⣛⠿⠿⠿⣿⣷⡄⠀[0m
+[38;5;27m⠀⠀⠀⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣉⡟⠀⠀[38;5;255m ⢸⣿⣧⣤⣤⣤⣤⢸⣿⣿⣦⣤⣤⣤⡄⣿⣿⡇⣾⣿⣿⣧⣤⣤⣤⡄⢰⣿⣿⠟⠛⠛⠻⣿⣿⡄[38;5;255m⢠⡀⠻⣿⣿⣦⣴⣿⣿⠇⢿⣿⣦⣤⣤⣿⣿⠇⣠[0m
+[38;5;27m⠀⠀⠀⠀⢰⡈⠛⠿⣿⣿⣿⣿⣿⠋⠀  [38;5;255m ⠘⠛⠛⠛⠛⠛⠛⠈⠛⠛⠛⠛⠛⠛⠃⠛⠛⠃⠛⠛⠛⠛⠛⠛⠛⠃⠛⠛⠃⠀⠀⠀⠀⠙⠛⠃[38;5;255m⠘⠛⠀⠈⠛⠛⠛⠛⠁⠀⠀⠙⠛⠛⠛⠛⠁⠚⠛[0m
+[38;5;27m⠀⠀⠀⠀⢸⣿⡦⠀⠀⠉⠛⠿⠃⠀⠀⠀ [38;5;255m ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[38;5;255m⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[0m
+
+[38;5;51mVersion: 1.0.12[0m
+
+[38;5;27m────────────────────────────────────────────────────────────────────[0m
+[38;5;27m│[38;5;208m [1mUpdate available:[0m[38;5;208m 1.0.12 → [38;5;46m[1m1.0.14[0m[38;5;208m                                [38;5;27m│[0m
+[38;5;27m│[38;5;208m Run [38;5;46m[1mbun i -g @elizaos/cli@latest[0m[38;5;208m to get the latest features      [38;5;27m│[0m
+[38;5;27m────────────────────────────────────────────────────────────────────[0m
+
+[2025-06-27 09:51:26] INFO: [36mNo character files specified, attempting to load project agents...[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded project from /Users/thomasheim/Programming/CyperpunkSecurity/Tooling/0xCypherpunkAI/backend/elizaOS/packages/server/dist/index.js[39m
+[2025-06-27 09:51:26] INFO: [36mFound 11 agent(s) in project configuration[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Static Code Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: DeFi Risk Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Access Control Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Gas Efficiency Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Attack Surface Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Upgradeability Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Oracle Manipulation Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: MEV Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Tokenomics Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Dependency Risk Agent[39m
+[2025-06-27 09:51:26] INFO: [36mLoaded character: Dangerous Functions Agent[39m
+[2025-06-27 09:51:26] INFO: [36m[INIT] Database Dir for SQL plugin: /Users/thomasheim/Programming/CyperpunkSecurity/Tooling/0xCypherpunkAI/backend/elizaOS/.eliza/.elizadb[39m
+[2025-06-27 09:51:26] INFO: [36m[INIT] Running database migrations for messaging tables...[39m
+[2025-06-27 09:51:26] INFO: [36mDatabaseMigrationService initialized with database[39m
+[2025-06-27 09:51:26] INFO: [36mRegistered schema for plugin: @elizaos/plugin-sql[39m
+[2025-06-27 09:51:26] INFO: [36mDiscovered 1 plugin schemas out of 1 plugins[39m
+[2025-06-27 09:51:26] INFO: [36mRunning migrations for 1 plugins...[39m
+[2025-06-27 09:51:26] INFO: [36mStarting migration for plugin: @elizaos/plugin-sql[39m
+[2025-06-27 09:51:26] WARN: [36m[CUSTOM MIGRATOR] Could not add foreign key constraint (may already exist): foreign key constraint "server_agents_server_id_fkey" cannot be implemented[39m
+[2025-06-27 09:51:26] INFO: [36mAll plugin migrations completed.[39m
+[2025-06-27 09:51:27] INFO: [36m[INIT] Ensuring default server exists...[39m
+[2025-06-27 09:51:27] INFO: [36m[AgentServer] Checking for default server...[39m
+[2025-06-27 09:51:27] INFO: [36m[AgentServer] Default server already exists with ID: 00000000-0000-0000-0000-000000000000[39m
+[2025-06-27 09:51:27] WARN: [36mServer authentication is disabled. Set ELIZA_SERVER_AUTH_TOKEN environment variable to enable.[39m
+[2025-06-27 09:51:27] INFO: [36m[SocketIO] Router initialized with 0 agents[39m
+[2025-06-27 09:51:27] INFO: [36m[SocketIO] Setting up Socket.IO event listeners[39m
+[2025-06-27 09:51:27] INFO: [36m[SocketIO] Registered message types: 1: ROOM_JOINING, 2: SEND_MESSAGE, 3: MESSAGE, 4: ACK, 5: THINKING, 6: CONTROL, ROOM_JOINING: 1, SEND_MESSAGE: 2, MESSAGE: 3, ACK: 4, THINKING: 5, CONTROL: 6[39m
+[2025-06-27 09:51:27] INFO: [36mFinal plugins being loaded: @elizaos/plugin-sql, bootstrap, openai-provider, 0xCypherpunkAI[39m
+🌆 Initializing 0xCypherpunkAI Security Platform...
+
+🎭 SPECIALIZED AGENT SWARM:
+  1. ⚡ Static Code Agent - Reentrancy, overflow/underflow, unchecked calls
+  2. 🛡️  DeFi Risk Agent - Flash loans, oracle manipulation, liquidity risks
+  3. 🔐 Access Control Agent - Privilege escalation, missing modifiers
+  4. ⚡ Gas Efficiency Agent - Expensive operations, optimization opportunities
+  5. 🎯 Attack Surface Agent - External calls, fallback function misuse
+  6. 🔄 Upgradeability Agent - Proxy patterns, storage slot corruption
+  7. 🔮 Oracle Manipulation Agent - Price feed spoofing, timestamp misuse
+  8. 💰 MEV Agent - Front-running, sandwich attacks, MEV extraction
+  9. 🪙  Tokenomics Agent - Unlimited minting, approval race conditions
+  10. 📦 Dependency Risk Agent - Vulnerable libraries, outdated versions
+  11. ⚠️  Dangerous Functions Agent - delegatecall, tx.origin, selfdestruct
+
+🧠 KNOWLEDGE SYSTEMS:
+  • RAG Knowledge Base: 44,000+ audit reports
+  • Solodit Intelligence: Specialized vulnerability patterns
+  • Real-time GitHub Scanning: Repository security analysis
+  • Multi-agent Consensus: 60% voting threshold
+
+🔌 CORE SERVICES:
+  • SecurityScanningService: Multi-agent coordination & consensus
+  • KnowledgeBaseService: RAG over comprehensive audit database
+  • SoloditRAGService: Specialized vulnerability intelligence
+
+🌐 API ENDPOINTS:
+  • /api/auth/github - GitHub OAuth authentication
+  • /api/auth/github/callback - OAuth callback handler
+  • /api/github/repos - List user repositories
+  • /api/github/repo-contents - Browse repository contents
+  • /api/scan/github - Initiate GitHub repository scan
+  • /api/results/:scanId - Fetch scan results
+
+⚙️  SECURITY CONFIGURATION:
+  • Consensus Threshold: 60%
+  • Critical Threshold: 80%
+  • Agent Specializations: 11 security domains
+  • RAG Embeddings: Semantic vulnerability search
+  • Audit Logging: Comprehensive security tracking
+
+🚀 0xCypherpunkAI Platform Ready!
+💡 Use elizaos start to deploy the security agent swarm
+
+[2025-06-27 09:51:27] INFO: [36mplugin-sql init starting...[39m
+[2025-06-27 09:51:27] INFO: [36mDatabase adapter created and registered[39m
+[2025-06-27 09:51:27] INFO: [36m🤖 OpenAI Provider initialized successfully[39m
+[2025-06-27 09:51:27] INFO: [36m🔐 Security Scanning Service started[39m
+[2025-06-27 09:51:27] INFO: [36m🧠 Knowledge Base Service started. Initialization is deferred until first use.[39m
+[2025-06-27 09:51:27] INFO: [36m🧠 Initializing Solodit RAG data for AI agents...[39m
+[2025-06-27 09:51:27] ERROR: [36mFailed to bind server to 0.0.0.0:3001:[39m
+    message: "(Error) listen EADDRINUSE: address already in use 0.0.0.0:3001"
+    stack: [
+      "Error: listen EADDRINUSE: address already in use 0.0.0.0:3001",
+      "at Server.setupListenHandle [as _listen2] (node:net:1939:16)",
+      "at listenInCluster (node:net:1996:12)",
+      "at node:net:2205:7",
+      "at process.processTicksAndRejections (node:internal/process/task_queues:90:21)"
+    ]
+[2025-06-27 09:51:27] ERROR: [36mPort 3001 is already in use. Please try a different port or stop the process using that port.[39m
+[2025-06-27 11:51:27.529 +0200] [32mINFO[39m: [36mRunning plugin migrations...[39m
+    agentName: "Static Code Agent"
+    logLevel: "info"
+[2025-06-27 11:51:27.529 +0200] [32mINFO[39m: [36mFound 1 plugins with schemas to migrate.[39m
+    agentName: "Static Code Agent"
+    logLevel: "info"
+[2025-06-27 11:51:27.529 +0200] [32mINFO[39m: [36mRunning migrations for plugin: @elizaos/plugin-sql[39m
+    agentName: "Static Code Agent"
+    logLevel: "info"
+[2025-06-27 11:51:27.529 +0200] [32mINFO[39m: [36mSuccessfully migrated plugin: @elizaos/plugin-sql[39m
+    agentName: "Static Code Agent"
+    logLevel: "info"
+[2025-06-27 11:51:27.529 +0200] [32mINFO[39m: [36mPlugin migrations completed.[39m
+    agentName: "Static Code Agent"
+    logLevel: "info"
+[2025-06-27 11:51:27.584 +0200] [33mWARN[39m: [36m[AgentRuntime][Static Code Agent] No TEXT_EMBEDDING model registered. Skipping embedding dimension setup.[39m
+    agentName: "Static Code Agent"
+    logLevel: "info"
+file:///Users/thomasheim/Programming/CyperpunkSecurity/Tooling/0xCypherpunkAI/backend/elizaOS/packages/server/dist/index.js:14889
+        throw error;
+        ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3001
+    at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+    at listenInCluster (node:net:1996:12)
+    at node:net:2205:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3001
+}
+
+Node.js v23.10.0

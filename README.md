@@ -4,7 +4,7 @@
 
 ![0xCypherpunkAI Logo](https://img.shields.io/badge/0xCypherpunkAI-Security%20Scanner-00ff94?style=for-the-badge&logo=ethereum&logoColor=white)
 
-**AI-Powered Smart Contract Security Analysis Platform**
+**Heuristic-Based Smart Contract Security Analysis Platform**
 
 [![ElizaOS](https://img.shields.io/badge/Built%20with-ElizaOS-bd00ff?style=flat-square)](https://github.com/elizaos/eliza)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-00d9ff?style=flat-square)](https://nextjs.org/)
@@ -15,26 +15,30 @@
 
 ## 🚀 Overview
 
-0xCypherpunkAI is a revolutionary security analysis platform built for the **ElizaOS AI Agent Prize**. It leverages the power of 11 specialized AI agents working in consensus to provide comprehensive smart contract security audits in under 30 seconds.
+0xCypherpunkAI is a high-speed security analysis platform built for the **ElizaOS AI Agent Prize**. It utilizes a novel approach where **3 parallel agents** run a suite of deterministic, heuristic-based checks and reach a consensus on findings. This provides comprehensive smart contract security audits in under 30 seconds.
 
 ### 🎯 Built for ElizaOS AI Agent Prize
 
-This project demonstrates the power of ElizaOS's multi-agent framework by creating a specialized security analysis system where multiple AI agents collaborate to identify vulnerabilities, assess risks, and provide actionable recommendations for smart contract security.
+This project demonstrates the power and flexibility of ElizaOS's multi-agent framework. Instead of slow, LLM-based analysis, we use agents as fast, parallel workers that vote on findings from a shared heuristic engine, showcasing a practical and performant use case for agent-based systems.
 
 ## ✨ Features
 
-- **🤖 11 Specialized AI Agents**: Multi-agent consensus for comprehensive security analysis
-- **⚡ Lightning Fast**: Complete audits in under 30 seconds
-- **🔗 GitHub Integration**: Direct repository scanning with OAuth authentication
-- **📊 Detailed Reports**: Comprehensive vulnerability analysis with risk assessments
-- **🎨 Cyberpunk UI**: Modern, responsive interface with neon aesthetics
-- **🔒 Secure Architecture**: Backend-managed OAuth with secure token handling
+- **⚡ Rapid Heuristic Analysis**: A comprehensive suite of fast, deterministic checks for common vulnerabilities.
+- **🤝 3-Agent Consensus Model**: Multiple agents run the same analysis in parallel and vote on findings to ensure accuracy and eliminate noise.
+- **🔗 GitHub Integration**: Scan any public Solidity repository directly via URL.
+- **📖 Detailed & Educational Reports**: Each finding includes an in-depth explanation of the risk and a clear, actionable recommendation for mitigation.
+- **🎨 Cyberpunk UI**: Modern, responsive interface with neon aesthetics.
+- **🔒 Secure Architecture**: Backend-managed OAuth with secure token handling for private repository scanning.
 
 ## 🏗️ Architecture
 
 ### Backend (ElizaOS)
 
+The backend leverages ElizaOS to manage a pool of 3 agents. When a scan is requested, the system fetches the repository content and distributes it to the agents. Each agent independently runs the same `performGeneralHeuristicAnalysis` function, and their results are fed into a `VoteEngine` that confirms findings based on consensus.
+
 - **Framework**: ElizaOS Multi-Agent System
+- **Agents**: 3 parallel workers running a deterministic heuristic engine
+- **Consensus**: A custom `VoteEngine` service to confirm vulnerabilities
 - **Runtime**: Bun
 - **Database**: PGLite/PostgreSQL
 - **Authentication**: GitHub OAuth 2.0
@@ -239,18 +243,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 This project demonstrates the power of ElizaOS's multi-agent framework by:
 
-- **Multi-Agent Consensus**: 11 specialized AI agents analyze different aspects of smart contract security
-- **Real-World Application**: Practical security analysis tool for the Web3 ecosystem
-- **Scalable Architecture**: Built on ElizaOS's robust plugin and service system
-- **User Experience**: Intuitive interface that makes AI-powered security accessible
+- **Innovative Agent Model**: Shifting from slow LLM-based analysis to a high-speed, consensus-driven heuristic model. Agents act as parallel validators, a novel and practical application of the agent framework.
+- **Real-World Application**: A practical and extremely fast security analysis tool for the Web3 ecosystem.
+- **Scalable Architecture**: Built on ElizaOS's robust plugin and service system, capable of handling complex analysis workflows.
+- **User Experience**: An intuitive interface that makes powerful security analysis accessible and easy to understand.
 
 ### Key Technical Achievements
 
-1. **Agent Orchestration**: Sophisticated coordination between multiple specialized security analysis agents
-2. **GitHub Integration**: Seamless OAuth flow and repository access
-3. **Real-Time Analysis**: Fast, efficient processing of smart contract code
-4. **Consensus Mechanism**: Agents vote on findings to reduce false positives
-5. **Extensible Design**: Plugin architecture allows for easy addition of new analysis techniques
+1.  **Heuristic Consensus Engine**: Developed a system where agents vote on findings from a deterministic analysis, ensuring high speed and accuracy.
+2.  **Recursive GitHub Fetching**: Implemented a robust, cached, and authenticated service to fetch all `.sol` files from a repository, including those in subdirectories.
+3.  **Detailed Reporting**: Created a vulnerability reporting structure that provides deep educational context and actionable recommendations for every finding.
+4.  **Performant Architecture**: Refactored the agent and service architecture to be highly performant, delivering full repository scans in seconds.
 
 ## 🔗 Links
 

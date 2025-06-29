@@ -12,7 +12,14 @@ import {
   ExternalLink,
   RefreshCw,
 } from "lucide-react";
-import { listRepositories, startSecurityScan, GitHubRepo } from "@/lib/api";
+import {
+  listRepositories,
+  startSecurityScan,
+  getScanResult,
+  GitHubRepo,
+  ScanResult,
+  VulnerabilityFinding,
+} from "@/lib/api";
 
 interface ScanSectionProps {
   isAuthenticated?: boolean;
@@ -25,11 +32,13 @@ export default function ScanSection({
 }: ScanSectionProps) {
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResults, setScanResults] = useState<any>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [repositories, setRepositories] = useState<GitHubRepo[]>([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [repoError, setRepoError] = useState<string>("");
+  const [scanStatus, setScanStatus] = useState<string>("");
+  const [progress, setProgress] = useState(0);
 
   // Load repositories when authenticated
   useEffect(() => {
@@ -53,79 +62,73 @@ export default function ScanSection({
   };
 
   // Filter repositories based on search term
-  const filteredRepos = repositories.filter(
-    (repo) =>
-      repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      repo.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const mockScanResults = {
-    overallConfidence: 87,
-    totalFindings: 8,
-    criticalFindings: 1,
-    highFindings: 2,
-    mediumFindings: 3,
-    lowFindings: 2,
-    scanDuration: "28s",
-    findings: [
-      {
-        id: 1,
-        severity: "critical" as const,
-        title: "Reentrancy Vulnerability in withdraw()",
-        description:
-          "The withdraw function is vulnerable to reentrancy attacks due to external call before state update.",
-        location: "contracts/TokenVault.sol:45-52",
-        agentConsensus: 94,
-        recommendation:
-          "Implement checks-effects-interactions pattern or use ReentrancyGuard modifier.",
-      },
-      {
-        id: 2,
-        severity: "high" as const,
-        title: "Missing Access Control on Admin Functions",
-        description:
-          "Critical administrative functions lack proper access control modifiers.",
-        location: "contracts/TokenVault.sol:78-85",
-        agentConsensus: 89,
-        recommendation:
-          "Add onlyOwner or role-based access control modifiers to all admin functions.",
-      },
-    ],
-  };
+  const filteredRepos =
+    repositories?.filter(
+      (repo) =>
+        repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (repo.description &&
+          repo.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    ) || [];
 
   const handleScan = async () => {
     if (!selectedRepo) return;
     setIsScanning(true);
-    setScanResults(null);
+    setScanResult(null);
 
     try {
-      const result = await startSecurityScan({
+      const initialResponse = await startSecurityScan({
         repository: selectedRepo.full_name,
-        path: "", // For now, scan the entire repository
+        path: "",
       });
 
-      // For demo purposes, show mock results after a delay
-      // In a real implementation, you would poll for results or use WebSockets
-      setTimeout(() => {
-        setScanResults(mockScanResults);
-        setIsScanning(false);
-      }, 3000);
+      const { scanId } = initialResponse;
+
+      // Poll for results with real progress tracking
+      const poll = setInterval(async () => {
+        try {
+          const scanData = await getScanResult(scanId);
+          if (scanData) {
+            setScanResult(scanData);
+            // Update progress from backend
+            setProgress(scanData.progress || 0);
+
+            // Update status based on backend state
+            if (scanData.status === "COMPLETED") {
+              clearInterval(poll);
+              setIsScanning(false);
+              setScanStatus("completed");
+              setProgress(100);
+            } else if (scanData.status === "FAILED") {
+              clearInterval(poll);
+              setIsScanning(false);
+              setScanStatus("failed");
+              setProgress(100);
+            } else if (scanData.status === "SCANNING") {
+              setScanStatus("scanning");
+            } else if (scanData.status === "VOTING") {
+              setScanStatus("voting");
+            }
+          }
+        } catch (error) {
+          console.error("Error polling scan results:", error);
+        }
+      }, 2000); // Poll every 2 seconds for real-time updates
     } catch (error) {
       console.error("Failed to start scan:", error);
       setIsScanning(false);
-      // Handle error - could show a toast notification
+      setScanStatus("failed");
     }
   };
 
   const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "critical":
+    switch (severity.toUpperCase()) {
+      case "CRITICAL":
         return "text-red-400 bg-red-400/10 border-red-400/30";
-      case "high":
+      case "HIGH":
         return "text-orange-400 bg-orange-400/10 border-orange-400/30";
-      case "medium":
+      case "MEDIUM":
         return "text-yellow-400 bg-yellow-400/10 border-yellow-400/30";
-      case "low":
+      case "LOW":
         return "text-green-400 bg-green-400/10 border-green-400/30";
       default:
         return "text-gray-400 bg-gray-400/10 border-gray-400/30";
@@ -146,7 +149,7 @@ export default function ScanSection({
             </h2>
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
               Connect your GitHub account to access our AI-powered security
-              analysis platform and scan your Solidity contracts with 11
+              analysis platform and scan your Solidity contracts with 3
               specialized agents.
             </p>
             <button
@@ -177,8 +180,8 @@ export default function ScanSection({
             </span>
           </h2>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            Select a repository to begin comprehensive security analysis with
-            our AI agent network.
+            Select a repository to begin a comprehensive security analysis with
+            our fast, heuristic-based AI agent network.
           </p>
         </div>
 
@@ -222,11 +225,7 @@ export default function ScanSection({
                   </div>
                 ) : filteredRepos.length === 0 ? (
                   <div className="text-center py-8">
-                    <p className="text-gray-400">
-                      {searchTerm
-                        ? "No repositories match your search."
-                        : "No repositories found."}
-                    </p>
+                    <p className="text-gray-400">No repositories found.</p>
                   </div>
                 ) : (
                   filteredRepos.map((repo) => (
@@ -327,8 +326,16 @@ export default function ScanSection({
                 <div className="w-full bg-white/10 rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-neon-green to-neon-blue h-2 rounded-full animate-pulse"
-                    style={{ width: "70%" }}
+                    style={{ width: `${progress}%` }}
                   ></div>
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-400">
+                    Scanning repository with 11 security agents...
+                  </p>
+                  <span className="text-sm text-neon-green font-mono">
+                    {Math.round(progress)}%
+                  </span>
                 </div>
               </div>
             </div>
@@ -336,112 +343,145 @@ export default function ScanSection({
         </div>
 
         {/* Scan Results */}
-        {scanResults && (
-          <div className="glass rounded-3xl p-8">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-white">Scan Results</h3>
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-neon-green">
-                    {scanResults.overallConfidence}%
-                  </div>
-                  <div className="text-sm text-gray-400">Confidence</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-neon-blue">
-                    {scanResults.scanDuration}
-                  </div>
-                  <div className="text-sm text-gray-400">Duration</div>
-                </div>
-              </div>
+        {scanResult && (
+          <div className="glass rounded-3xl p-8 mt-8">
+            <h3 className="text-2xl font-bold text-white mb-6">Scan Results</h3>
+            <div className="grid grid-cols-2 gap-4 text-center md:grid-cols-4 mb-6">
+              <Stat label="Status" value={scanResult.status} />
+              <Stat label="Progress" value={`${scanResult.progress || 0}%`} />
+              <Stat label="Findings" value={scanResult.findings?.length || 0} />
+              <Stat
+                label="Avg. Confidence"
+                value={`${Math.round(
+                  (scanResult.finalConfidenceScore || 0) * 100
+                )}%`}
+              />
+            </div>
+            <div className="mt-6">
+              <Progress value={scanResult.progress || 0} />
             </div>
 
-            {/* Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <div className="text-center p-4 rounded-lg bg-red-400/10 border border-red-400/30">
-                <div className="text-2xl font-bold text-red-400">
-                  {scanResults.criticalFindings}
+            {/* Vulnerability List */}
+            <div className="mt-8">
+              <h4 className="text-xl font-semibold text-white mb-4">
+                Vulnerabilities Found
+              </h4>
+              {scanResult.findings && scanResult.findings.length > 0 ? (
+                <div className="space-y-4">
+                  {scanResult.findings.map((finding) => (
+                    <VulnerabilityCard
+                      key={finding.id}
+                      finding={finding}
+                      repoUrl={
+                        scanResult.githubRepo
+                          ? `https://github.com/${scanResult.githubRepo}`
+                          : undefined
+                      }
+                    />
+                  ))}
                 </div>
-                <div className="text-sm text-gray-400">Critical</div>
-              </div>
-              <div className="text-center p-4 rounded-lg bg-orange-400/10 border border-orange-400/30">
-                <div className="text-2xl font-bold text-orange-400">
-                  {scanResults.highFindings}
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-neon-green" />
+                  <p className="text-lg">
+                    No vulnerabilities confirmed by the agents.
+                  </p>
                 </div>
-                <div className="text-sm text-gray-400">High</div>
-              </div>
-              <div className="text-center p-4 rounded-lg bg-yellow-400/10 border border-yellow-400/30">
-                <div className="text-2xl font-bold text-yellow-400">
-                  {scanResults.mediumFindings}
-                </div>
-                <div className="text-sm text-gray-400">Medium</div>
-              </div>
-              <div className="text-center p-4 rounded-lg bg-green-400/10 border border-green-400/30">
-                <div className="text-2xl font-bold text-green-400">
-                  {scanResults.lowFindings}
-                </div>
-                <div className="text-sm text-gray-400">Low</div>
-              </div>
-            </div>
-
-            {/* Findings */}
-            <div className="space-y-4">
-              {scanResults.findings.map((finding: any) => (
-                <div
-                  key={finding.id}
-                  className="glass rounded-xl p-6 border border-white/10"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <AlertTriangle
-                        className={`h-5 w-5 ${
-                          finding.severity === "critical"
-                            ? "text-red-400"
-                            : "text-orange-400"
-                        }`}
-                      />
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium border ${getSeverityColor(
-                          finding.severity
-                        )}`}
-                      >
-                        {finding.severity.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-neon-green">
-                        {finding.agentConsensus}%
-                      </div>
-                      <div className="text-xs text-gray-400">Consensus</div>
-                    </div>
-                  </div>
-
-                  <h4 className="text-lg font-semibold text-white mb-3">
-                    {finding.title}
-                  </h4>
-                  <p className="text-gray-300 mb-4">{finding.description}</p>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">
-                      Location: {finding.location}
-                    </span>
-                    <ExternalLink className="h-4 w-4 text-gray-400" />
-                  </div>
-
-                  <div className="mt-4 p-4 rounded-lg bg-white/5 border border-white/10">
-                    <h5 className="font-medium text-white mb-2">
-                      Recommendation:
-                    </h5>
-                    <p className="text-gray-300 text-sm">
-                      {finding.recommendation}
-                    </p>
-                  </div>
-                </div>
-              ))}
+              )}
             </div>
           </div>
         )}
       </div>
     </section>
   );
+}
+
+// UI Components (Stat, Progress, VulnerabilityCard)
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="glass rounded-lg p-4">
+      <p className="text-sm text-gray-400">{label}</p>
+      <p className="text-2xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function Progress({ value }: { value: number }) {
+  return (
+    <div className="w-full bg-white/10 rounded-full h-2.5">
+      <div
+        className="bg-gradient-to-r from-neon-green to-neon-blue h-2.5 rounded-full transition-all duration-500"
+        style={{ width: `${value}%` }}
+      ></div>
+    </div>
+  );
+}
+
+function VulnerabilityCard({
+  finding,
+  repoUrl,
+}: {
+  finding: VulnerabilityFinding;
+  repoUrl?: string;
+}) {
+  const locationUrl =
+    repoUrl && finding.location.file
+      ? `${repoUrl}/blob/main/${finding.location.file}#L${finding.location.line}`
+      : "#";
+
+  const locationText = finding.location.file
+    ? `${finding.location.file}, Line ${finding.location.line}`
+    : "N/A";
+
+  return (
+    <div className="rounded-lg border bg-card p-4 text-card-foreground">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">{finding.title}</h3>
+        <span
+          className={`px-2 py-1 text-xs font-bold rounded-full ${getSeverityTextClass(
+            finding.severity
+          )} bg-card-foreground/10`}
+        >
+          {finding.severity}
+        </span>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        <a
+          href={locationUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline"
+        >
+          {locationText}
+        </a>
+      </p>
+      <p className="mt-2 text-sm">{finding.description}</p>
+      <div className="mt-4">
+        <h4 className="font-semibold">Recommendation</h4>
+        <p className="text-sm text-muted-foreground">
+          {finding.recommendation}
+        </p>
+      </div>
+      <div className="mt-4">
+        <h4 className="font-semibold">Confidence</h4>
+        <p className="text-sm text-muted-foreground">{finding.confidence}%</p>
+      </div>
+    </div>
+  );
+}
+
+function getSeverityTextClass(severity: string) {
+  switch (severity.toUpperCase()) {
+    case "CRITICAL":
+      return "text-red-400";
+    case "HIGH":
+      return "text-orange-400";
+    case "MEDIUM":
+      return "text-yellow-400";
+    case "LOW":
+      return "text-blue-400";
+    default:
+      return "text-gray-400";
+  }
 }

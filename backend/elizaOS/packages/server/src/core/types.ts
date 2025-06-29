@@ -6,11 +6,11 @@ export interface VulnerabilityFinding {
   description: string;
   location: {
     file: string;
-    line?: number;
-    function?: string;
+    line: number;
   };
   recommendation: string;
   confidence: number; // 0-100
+  codeSnippet?: string;
   gasImpact?: number;
   references?: string[];
 }

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {
   type Character,
   DatabaseAdapter,
@@ -5,6 +6,7 @@ import {
   logger,
   type UUID,
   type Project,
+  AgentRuntime,
 } from '@elizaos/core';
 import cors from 'cors';
 import express, { Request, Response } from 'express';
@@ -36,30 +38,22 @@ import { resolveEnvFile } from './api/system/environment.js';
 import dotenv from 'dotenv';
 import { cypherpunkSecurityPlugin } from './plugins/cypherpunk-security-plugin.js';
 
+// Import required ElizaOS plugins
+import bootstrapPlugin from '@elizaos/plugin-bootstrap';
+import { ollamaPlugin } from './plugins/ollama-provider.js';
+
 // Import all specialized agent characters
 import { staticCodeAgentCharacter } from './characters/static-code-agent.js';
-import { defiRiskAgentCharacter } from './characters/defi-risk-agent.js';
 import { accessControlAgentCharacter } from './characters/access-control-agent.js';
-import { gasEfficiencyAgentCharacter } from './characters/gas-efficiency-agent.js';
 import { attackSurfaceAgentCharacter } from './characters/attack-surface-agent.js';
 import { upgradeabilityAgentCharacter } from './characters/upgradeability-agent.js';
-import { oracleManipulationAgentCharacter } from './characters/oracle-manipulation-agent.js';
-import { mevAgentCharacter } from './characters/mev-agent.js';
-import { tokenomicsAgentCharacter } from './characters/tokenomics-agent.js';
-import { dependencyRiskAgentCharacter } from './characters/dependency-risk-agent.js';
 import { dangerousFunctionsAgentCharacter } from './characters/dangerous-functions-agent.js';
 
-const allCharacters = [
+export const allCharacters = [
   staticCodeAgentCharacter,
-  defiRiskAgentCharacter,
   accessControlAgentCharacter,
-  gasEfficiencyAgentCharacter,
   attackSurfaceAgentCharacter,
   upgradeabilityAgentCharacter,
-  oracleManipulationAgentCharacter,
-  mevAgentCharacter,
-  tokenomicsAgentCharacter,
-  dependencyRiskAgentCharacter,
   dangerousFunctionsAgentCharacter,
 ];
 
@@ -159,8 +153,49 @@ export class AgentServer {
 
   public database!: DatabaseAdapter;
 
-  public startAgent!: (character: Character) => Promise<IAgentRuntime>;
-  public stopAgent!: (runtime: IAgentRuntime) => void;
+  /**
+   * Starts a new agent with the given character, initializes it, and registers it with the server.
+   * @param character The character definition for the agent to start.
+   * @returns The initialized and started agent runtime.
+   */
+  public async startAgent(character: Character): Promise<IAgentRuntime> {
+    // Define the plugins that every agent will use
+    const agentPlugins = [
+      bootstrapPlugin,
+      sqlPlugin,
+      ollamaPlugin,
+      cypherpunkSecurityPlugin,
+      messageBusConnectorPlugin,
+    ];
+
+    const runtime = new AgentRuntime({
+      character,
+      plugins: agentPlugins,
+      adapter: this.database, // Pass the server's database adapter to the agent
+    });
+
+    await runtime.initialize();
+    await this.registerAgent(runtime);
+
+    logger.info(`Started and registered agent: ${character.name} (${runtime.agentId})`);
+    return runtime;
+  }
+
+  /**
+   * Stops a running agent and unregisters it from the server.
+   * @param runtime The runtime instance of the agent to stop.
+   */
+  public async stopAgent(runtime: IAgentRuntime): Promise<void> {
+    if (!runtime) return;
+
+    const agentId = runtime.agentId;
+    const agentName = runtime.character.name;
+
+    await runtime.stop();
+    this.unregisterAgent(agentId);
+    logger.info(`Stopped and unregistered agent: ${agentName} (${agentId})`);
+  }
+
   public loadCharacterTryPath!: (characterPath: string) => Promise<Character>;
   public jsonToCharacter!: (character: unknown) => Promise<Character>;
 
@@ -200,6 +235,13 @@ export class AgentServer {
 
       const agentDataDir = await resolvePgliteDir(options?.dataDir);
       logger.info(`[INIT] Database Dir for SQL plugin: ${agentDataDir}`);
+
+      // Ensure the database directory exists before initializing the adapter
+      if (!fs.existsSync(agentDataDir)) {
+        fs.mkdirSync(agentDataDir, { recursive: true });
+        logger.info(`[INIT] Created database directory: ${agentDataDir}`);
+      }
+
       this.database = createDatabaseAdapter(
         {
           dataDir: agentDataDir,
@@ -815,108 +857,111 @@ export class AgentServer {
    * @param {number} port - The port number on which the server should listen.
    * @throws {Error} If the port is invalid or if there is an error while starting the server.
    */
-  public start(port: number) {
-    try {
-      if (!port || typeof port !== 'number') {
-        throw new Error(`Invalid port number: ${port}`);
-      }
+  public start(port: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        if (!port || typeof port !== 'number') {
+          throw new Error(`Invalid port number: ${port}`);
+        }
 
-      logger.debug(`Starting server on port ${port}...`);
-      logger.debug(`Current agents count: ${this.agents.size}`);
-      logger.debug(`Environment: ${process.env.NODE_ENV}`);
+        logger.debug(`Starting server on port ${port}...`);
+        logger.debug(`Current agents count: ${this.agents.size}`);
+        logger.debug(`Environment: ${process.env.NODE_ENV}`);
 
-      // Use http server instead of app.listen with explicit host binding and error handling
-      // For tests and macOS compatibility, prefer 127.0.0.1 when specified
-      const host = process.env.SERVER_HOST || '0.0.0.0';
+        // Use http server instead of app.listen with explicit host binding and error handling
+        // For tests and macOS compatibility, prefer 127.0.0.1 when specified
+        const host = process.env.SERVER_HOST || '0.0.0.0';
 
-      this.server
-        .listen(port, host, () => {
-          // Only show the dashboard URL in production mode
-          if (process.env.NODE_ENV !== 'development') {
-            // Display the dashboard URL with the correct port after the server is actually listening
-            console.log(
-              `\x1b[32mStartup successful!\nGo to the dashboard at \x1b[1mhttp://localhost:${port}\x1b[22m\x1b[0m`
+        this.server
+          .listen(port, host, () => {
+            // Only show the dashboard URL in production mode
+            if (process.env.NODE_ENV !== 'development') {
+              // Display the dashboard URL with the correct port after the server is actually listening
+              console.log(
+                `\x1b[32mStartup successful!\nGo to the dashboard at \x1b[1mhttp://localhost:${port}\x1b[22m\x1b[0m`
+              );
+            }
+
+            // Add log for test readiness
+            console.log(`AgentServer is listening on port ${port}`);
+
+            logger.success(
+              `REST API bound to ${host}:${port}. If running locally, access it at http://localhost:${port}.`
             );
-          }
+            logger.debug(`Active agents: ${this.agents.size}`);
+            this.agents.forEach((agent, id) => {
+              logger.debug(`- Agent ${id}: ${agent.character.name}`);
+            });
+            resolve();
+          })
+          .on('error', (error: any) => {
+            logger.error(`Failed to bind server to ${host}:${port}:`, error);
 
-          // Add log for test readiness
-          console.log(`AgentServer is listening on port ${port}`);
+            // Provide helpful error messages for common issues
+            if (error.code === 'EADDRINUSE') {
+              logger.error(
+                `Port ${port} is already in use. Please try a different port or stop the process using that port.`
+              );
+            } else if (error.code === 'EACCES') {
+              logger.error(
+                `Permission denied to bind to port ${port}. Try using a port above 1024 or running with appropriate permissions.`
+              );
+            } else if (error.code === 'EADDRNOTAVAIL') {
+              logger.error(
+                `Cannot bind to ${host}:${port} - address not available. Check if the host address is correct.`
+              );
+            }
 
-          logger.success(
-            `REST API bound to ${host}:${port}. If running locally, access it at http://localhost:${port}.`
-          );
-          logger.debug(`Active agents: ${this.agents.size}`);
-          this.agents.forEach((agent, id) => {
-            logger.debug(`- Agent ${id}: ${agent.character.name}`);
+            reject(error);
           });
-        })
-        .on('error', (error: any) => {
-          logger.error(`Failed to bind server to ${host}:${port}:`, error);
 
-          // Provide helpful error messages for common issues
-          if (error.code === 'EADDRINUSE') {
-            logger.error(
-              `Port ${port} is already in use. Please try a different port or stop the process using that port.`
-            );
-          } else if (error.code === 'EACCES') {
-            logger.error(
-              `Permission denied to bind to port ${port}. Try using a port above 1024 or running with appropriate permissions.`
-            );
-          } else if (error.code === 'EADDRNOTAVAIL') {
-            logger.error(
-              `Cannot bind to ${host}:${port} - address not available. Check if the host address is correct.`
-            );
+        // Enhanced graceful shutdown
+        const gracefulShutdown = async () => {
+          logger.info('Received shutdown signal, initiating graceful shutdown...');
+
+          // Stop all agents first
+          logger.debug('Stopping all agents...');
+          for (const [id, agent] of this.agents.entries()) {
+            try {
+              await agent.stop();
+              logger.debug(`Stopped agent ${id}`);
+            } catch (error) {
+              logger.error(`Error stopping agent ${id}:`, error);
+            }
           }
 
-          throw error;
-        });
-
-      // Enhanced graceful shutdown
-      const gracefulShutdown = async () => {
-        logger.info('Received shutdown signal, initiating graceful shutdown...');
-
-        // Stop all agents first
-        logger.debug('Stopping all agents...');
-        for (const [id, agent] of this.agents.entries()) {
-          try {
-            await agent.stop();
-            logger.debug(`Stopped agent ${id}`);
-          } catch (error) {
-            logger.error(`Error stopping agent ${id}:`, error);
+          // Close database
+          if (this.database) {
+            try {
+              await this.database.close();
+              logger.info('Database closed.');
+            } catch (error) {
+              logger.error('Error closing database:', error);
+            }
           }
-        }
 
-        // Close database
-        if (this.database) {
-          try {
-            await this.database.close();
-            logger.info('Database closed.');
-          } catch (error) {
-            logger.error('Error closing database:', error);
-          }
-        }
+          // Close server
+          this.server.close(() => {
+            logger.success('Server closed successfully');
+            process.exit(0);
+          });
 
-        // Close server
-        this.server.close(() => {
-          logger.success('Server closed successfully');
-          process.exit(0);
-        });
+          // Force close after timeout
+          setTimeout(() => {
+            logger.error('Could not close connections in time, forcing shutdown');
+            process.exit(1);
+          }, 5000);
+        };
 
-        // Force close after timeout
-        setTimeout(() => {
-          logger.error('Could not close connections in time, forcing shutdown');
-          process.exit(1);
-        }, 5000);
-      };
+        process.on('SIGTERM', gracefulShutdown);
+        process.on('SIGINT', gracefulShutdown);
 
-      process.on('SIGTERM', gracefulShutdown);
-      process.on('SIGINT', gracefulShutdown);
-
-      logger.debug('Shutdown handlers registered');
-    } catch (error) {
-      logger.error('Failed to start server:', error);
-      throw error;
-    }
+        logger.debug('Shutdown handlers registered');
+      } catch (error) {
+        logger.error('Failed to start server:', error);
+        reject(error);
+      }
+    });
   }
 
   /**
@@ -1131,8 +1176,8 @@ export * from './types';
 const project: Project = {
   agents: allCharacters.map((character) => ({
     character,
-    // All capabilities, including API routes, are loaded through this single plugin.
-    plugins: [cypherpunkSecurityPlugin],
+    // Load essential plugins: bootstrap for core functionality, OpenAI for LLM, and security plugin for scanning
+    plugins: [bootstrapPlugin, ollamaPlugin, cypherpunkSecurityPlugin],
   })),
 };
 

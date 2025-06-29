@@ -1531,26 +1531,52 @@ export abstract class BaseDrizzleAdapter extends DatabaseAdapter<any> {
 
     const memoryId = memory.id ?? (v4() as UUID);
 
-    const existing = await this.getMemoryById(memoryId);
-    if (existing) {
-      logger.debug('Memory already exists, skipping creation:', {
-        memoryId,
-      });
-      return memoryId;
-    }
+    // Fast-path for bulk knowledge-base imports: skip duplicate & similarity checks to cut query load
+    const skipChecks = memory.metadata?.source === 'knowledge_base';
 
+    let existing: Memory | null = null;
     let isUnique = true;
-    if (memory.embedding && Array.isArray(memory.embedding)) {
-      const similarMemories = await this.searchMemoriesByEmbedding(memory.embedding, {
-        tableName,
-        // Use the scope fields from the memory object for similarity check
-        roomId: memory.roomId,
-        worldId: memory.worldId,
-        entityId: memory.entityId,
-        match_threshold: 0.95,
-        count: 1,
-      });
-      isUnique = similarMemories.length === 0;
+
+    if (!skipChecks) {
+      try {
+        existing = await this.getMemoryById(memoryId);
+      } catch (err) {
+        // If the lookup fails (e.g., out-of-memory during heavy load), proceed as if the memory is new.
+        logger.warn('getMemoryById failed – continuing with insert to avoid hard crash:', {
+          memoryId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      if (existing) {
+        logger.debug('Memory already exists, skipping creation:', {
+          memoryId,
+        });
+        return memoryId;
+      }
+
+      // Only run costly similarity search if we didn't skip and we have an embedding.
+      if (memory.embedding && Array.isArray(memory.embedding)) {
+        try {
+          const similarMemories = await this.searchMemoriesByEmbedding(memory.embedding, {
+            tableName,
+            // Use the scope fields from the memory object for similarity check
+            roomId: memory.roomId,
+            worldId: memory.worldId,
+            entityId: memory.entityId,
+            match_threshold: 0.95,
+            count: 1,
+          });
+          isUnique = similarMemories.length === 0;
+        } catch (err) {
+          // If similarity search bombs out (e.g., database under memory pressure), default to unique=false to keep inserting.
+          logger.warn('searchMemoriesByEmbedding failed – defaulting isUnique=false:', {
+            memoryId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          isUnique = false;
+        }
+      }
     }
 
     const contentToInsert =

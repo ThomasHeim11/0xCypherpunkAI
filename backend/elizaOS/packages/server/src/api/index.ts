@@ -444,7 +444,60 @@ export function createApiRouter(
   router.use('/auth', authRouter());
 
   // Mount GitHub router at /github - handles GitHub API operations
-  router.use('/github', githubRouter());
+  router.use('/github', githubRouter(agents));
+
+  // Add results endpoint for scan results
+  router.get('/results/:scanId', async (req: any, res: any) => {
+    try {
+      const { scanId } = req.params;
+
+      if (!scanId) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Missing scanId parameter', code: 'MISSING_SCAN_ID' },
+        });
+      }
+
+      // Get the first available runtime to access SecurityScanningService
+      const runtime = agents.values().next().value;
+      if (!runtime) {
+        return res.status(503).json({
+          success: false,
+          error: { message: 'No runtime available', code: 'NO_RUNTIME_AVAILABLE' },
+        });
+      }
+
+      const { SecurityScanningService } = await import('../core/security-scanning-service.js');
+      const securityService = runtime.getService(SecurityScanningService.serviceType) as any;
+
+      if (!securityService) {
+        return res.status(503).json({
+          success: false,
+          error: { message: 'SecurityScanningService not available', code: 'SERVICE_UNAVAILABLE' },
+        });
+      }
+
+      const result = securityService.getScanResult(scanId);
+
+      if (!result) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Scan not found', code: 'SCAN_NOT_FOUND' },
+        });
+      }
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get scan result:', error);
+      res.status(500).json({
+        success: false,
+        error: { message: error.message || 'Failed to get scan result', code: 'SCAN_RESULT_ERROR' },
+      });
+    }
+  });
 
   // NOTE: /world routes have been removed - functionality moved to messaging/spaces
 
@@ -453,6 +506,51 @@ export function createApiRouter(
 
   // Add the plugin routes middleware AFTER specific routers
   router.use(createPluginRouteHandler(agents));
+
+  // Add progress tracking endpoint
+  router.get('/api/progress', async (_req, res) => {
+    try {
+      // Get RAG loading progress - COMMENTED OUT FOR HACKATHON PERFORMANCE
+      // const { KnowledgeBaseService } = await import('../core/knowledge-base-service.js');
+      // const ragProgress = KnowledgeBaseService.getLoadingProgress();
+
+      // Get active scans progress - use first available runtime instead
+      const runtime = agents.values().next().value;
+      const { SecurityScanningService } = await import('../core/security-scanning-service.js');
+      const securityService = runtime?.getService(SecurityScanningService.serviceType) as any;
+      const activeScans = securityService ? securityService.getActiveScans() : [];
+
+      const progressData = {
+        rag: {
+          // ...ragProgress,
+          loaded: 0,
+          total: 0,
+          phase: 'disabled',
+          percentage: 100,
+          isComplete: true,
+        },
+        scans: activeScans.map((scan) => ({
+          scanId: scan.scanId,
+          status: scan.status,
+          progress: scan.progress,
+          findings: scan.findings.length,
+          startTime: scan.timestamp,
+          completedAt: scan.completedAt,
+        })),
+        timestamp: new Date().toISOString(),
+      };
+
+      res.json(progressData);
+    } catch (error) {
+      console.error('Progress API error:', error);
+      res.status(500).json({
+        error: 'Failed to get progress data',
+        rag: { loaded: 0, total: 0, phase: 'disabled', percentage: 100 },
+        scans: [],
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
 
   return router;
 }

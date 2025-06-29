@@ -113,7 +113,7 @@ async function handleGitHubCallback(req: Request, res: Response, _runtime: IAgen
     // Redirect back to the frontend with the token in the query string
     // In a production app, use a more secure method like httpOnly cookies.
     const frontendUrl = getFrontendUrl(req);
-    res.redirect(`${frontendUrl}?github_token=${access_token}`);
+    res.redirect(`${frontendUrl}/auth/callback?github_token=${access_token}`);
   } catch (error: unknown) {
     logger.error('GitHub OAuth callback failed:', error);
     const message = error instanceof Error ? error.message : 'An unknown error occurred.';

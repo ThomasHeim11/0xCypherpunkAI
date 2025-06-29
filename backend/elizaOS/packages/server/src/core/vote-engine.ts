@@ -1,4 +1,4 @@
-import { VulnerabilityFinding, AgentVote, VoteEngineConfig } from './types';
+import { AgentVote, VoteEngineConfig } from './types';
 import { logger } from '@elizaos/core';
 
 export class VoteEngine {
@@ -93,7 +93,6 @@ export class VoteEngine {
     const totalVotes = weightedVotes.length;
     const confirmedVotes = voteBreakdown.CONFIRMED || 0;
     const rejectedVotes = voteBreakdown.REJECTED || 0;
-    const uncertainVotes = voteBreakdown.UNCERTAIN || 0;
 
     // Calculate percentages
     const confirmedPercentage = confirmedVotes / totalVotes;

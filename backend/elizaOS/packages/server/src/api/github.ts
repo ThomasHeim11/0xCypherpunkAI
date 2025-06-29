@@ -1,6 +1,7 @@
-import { logger } from '@elizaos/core';
+import { logger, IAgentRuntime, UUID } from '@elizaos/core';
 import axios from 'axios';
 import { Request, Response, Router } from 'express';
+import { SecurityScanningService } from '../core/security-scanning-service.js';
 
 interface GitHubRepo {
   id: number;
@@ -32,14 +33,18 @@ function getGitHubToken(req: Request): string | null {
 
 // List user's repositories
 async function handleListRepositories(req: Request, res: Response) {
+  logger.info('[GitHub API] Received request to list repositories.');
   try {
     const token = getGitHubToken(req);
     if (!token) {
+      logger.warn('[GitHub API] Unauthorized: GitHub access token was not provided.');
       return res.status(401).json({
         success: false,
         error: { message: 'GitHub access token required', code: 'UNAUTHORIZED' },
       });
     }
+
+    logger.info(`[GitHub API] Auth token received, starting with: ${token.substring(0, 8)}...`);
 
     // Fetch user's repositories from GitHub API
     const response = await axios.get<GitHubRepo[]>('https://api.github.com/user/repos', {
@@ -54,6 +59,10 @@ async function handleListRepositories(req: Request, res: Response) {
         type: 'all', // Include public and private repos
       },
     });
+
+    logger.info(
+      `[GitHub API] Successfully fetched ${response.data.length} repositories from GitHub.`
+    );
 
     const repos = response.data.map((repo) => ({
       id: repo.id,
@@ -155,21 +164,53 @@ async function handleStartScan(req: Request, res: Response) {
       });
     }
 
-    // Generate a unique scan ID
-    const scanId = `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Get the agents map from the request (injected by the router)
+    const agents = (req as any).agents as Map<UUID, IAgentRuntime>;
+    if (!agents || agents.size === 0) {
+      logger.error('No agents available for security scan');
+      return res.status(503).json({
+        success: false,
+        error: { message: 'No agents available for scanning', code: 'NO_AGENTS_AVAILABLE' },
+      });
+    }
 
-    // For now, we'll just return a mock scan ID
-    // In a real implementation, this would:
-    // 1. Clone or fetch the repository
-    // 2. Start the actual security scan with the AI agents
-    // 3. Store scan status in database
-    // 4. Process files in the background
+    // Get the first available runtime for scanning
+    const runtime = agents.values().next().value;
+    if (!runtime) {
+      logger.error('No runtime found in agents map');
+      return res.status(503).json({
+        success: false,
+        error: { message: 'No runtime available', code: 'NO_RUNTIME_AVAILABLE' },
+      });
+    }
 
-    logger.info(`Starting security scan for repository: ${repository}`, {
-      scanId,
+    // Get the SecurityScanningService
+    const securityService = runtime.getService<SecurityScanningService>(
+      SecurityScanningService.serviceType
+    );
+
+    if (!securityService) {
+      logger.error('SecurityScanningService not available');
+      return res.status(503).json({
+        success: false,
+        error: { message: 'Security scanning service not available', code: 'SERVICE_UNAVAILABLE' },
+      });
+    }
+
+    logger.info(`🚀 Starting REAL security scan for repository: ${repository}`, {
       path,
       token: token.substring(0, 8) + '...', // Log only first 8 chars for security
     });
+
+    // Start the real security scan with AI agents
+    const scanId = await securityService.startScan({
+      type: 'GITHUB',
+      githubRepo: repository,
+      githubPath: path,
+      accessToken: token,
+    });
+
+    logger.info(`✅ Security scan initiated with ID: ${scanId}`);
 
     res.json({
       success: true,
@@ -179,7 +220,7 @@ async function handleStartScan(req: Request, res: Response) {
         repository,
         path,
         estimatedDuration: '30-60 seconds',
-        message: 'Security scan has been initiated. You will receive results shortly.',
+        message: 'Real AI-powered security scan initiated with 11 specialized agents!',
       },
     });
   } catch (error: any) {
@@ -192,17 +233,21 @@ async function handleStartScan(req: Request, res: Response) {
   }
 }
 
-export function githubRouter(): Router {
+export function githubRouter(agents: Map<UUID, IAgentRuntime>): Router {
   const router = Router();
 
-  // GitHub API routes
+  // Routes that don't need agents (just GitHub API calls)
   router.get('/repos', (req: Request, res: Response) => {
     handleListRepositories(req, res);
   });
   router.get('/user', (req: Request, res: Response) => {
     handleGetUserProfile(req, res);
   });
+
+  // Routes that need agents (scanning operations)
   router.post('/scan', (req: Request, res: Response) => {
+    // Inject agents map only for scanning routes
+    (req as any).agents = agents;
     handleStartScan(req, res);
   });
 

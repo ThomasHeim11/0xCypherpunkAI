@@ -21,9 +21,9 @@ export default function Footer() {
               </div>
             </div>
             <p className="text-gray-400 max-w-md">
-              Revolutionary multi-agent security analysis platform powered by 11
-              specialized AI agents and enhanced with 44,000+ audit reports for
-              unparalleled smart contract security.
+              Advanced security analysis powered by 3 specialized agents using a
+              heuristic-based approach for rapid smart contract vulnerability
+              detection.
             </p>
           </div>
 

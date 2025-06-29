@@ -80,11 +80,8 @@ if (typeof window !== "undefined" && window.location.hostname === "localhost") {
 }
 
 export function getAuthToken(): string | undefined {
-  // Prefer cookie (set by backend) otherwise from localStorage
   if (typeof window === "undefined") return undefined;
-  return (
-    Cookies.get("auth_token") || localStorage.getItem("auth_token") || undefined
-  );
+  return localStorage.getItem("auth_token") || undefined;
 }
 
 export async function fetchWithAuth<T>(
@@ -131,11 +128,42 @@ export interface GitHubUser {
 
 export interface ScanResult {
   scanId: string;
-  status: string;
-  repository: string;
-  path: string;
-  estimatedDuration: string;
-  message: string;
+  contractAddress?: string;
+  githubRepo?: string;
+  githubPath?: string;
+  chain?: string;
+  status: "PENDING" | "SCANNING" | "VOTING" | "COMPLETED" | "FAILED";
+  progress: number; // 0-100
+  findings: VulnerabilityFinding[];
+  agentVotes: AgentVote[];
+  finalConfidenceScore: number;
+  totalVotes: number;
+  consensusReached: boolean;
+  timestamp: Date;
+  completedAt?: Date;
+}
+
+export interface VulnerabilityFinding {
+  id: string;
+  type: string;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+  title: string;
+  description: string;
+  location: {
+    file: string;
+    line: number;
+  };
+  recommendation: string;
+  confidence: number;
+}
+
+export interface AgentVote {
+  agentId: string;
+  findingId: string;
+  vote: "CONFIRM" | "REJECT" | "UNCERTAIN";
+  confidence: number;
+  reasoning?: string;
+  timestamp: Date;
 }
 
 // API functions
@@ -164,6 +192,13 @@ export async function startSecurityScan(data: {
       method: "POST",
       body: JSON.stringify(data),
     }
+  );
+  return response.data;
+}
+
+export async function getScanResult(scanId: string): Promise<ScanResult> {
+  const response = await fetchWithAuth<{ success: boolean; data: ScanResult }>(
+    `/api/results/${scanId}`
   );
   return response.data;
 }

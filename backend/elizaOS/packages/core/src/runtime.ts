@@ -1309,24 +1309,27 @@ export class AgentRuntime implements IAgentRuntime {
         });
       }
 
-      // Keep the existing model logging for backward compatibility
-      this.adapter.log({
-        entityId: this.agentId,
-        roomId: this.agentId,
-        body: {
-          modelType,
-          modelKey,
-          params: {
-            ...(typeof params === 'object' && !Array.isArray(params) && params ? params : {}),
-            prompt: promptContent,
+      // Skip heavy logging for TEXT_EMBEDDING calls to prevent excessive memory usage
+      if (modelKey !== ModelType.TEXT_EMBEDDING) {
+        // Keep the existing model logging for backward compatibility on all other model types
+        this.adapter.log({
+          entityId: this.agentId,
+          roomId: this.agentId,
+          body: {
+            modelType,
+            modelKey,
+            params: {
+              ...(typeof params === 'object' && !Array.isArray(params) && params ? params : {}),
+              prompt: promptContent,
+            },
+            response:
+              Array.isArray(response) && response.every((x) => typeof x === 'number')
+                ? '[array]'
+                : response,
           },
-          response:
-            Array.isArray(response) && response.every((x) => typeof x === 'number')
-              ? '[array]'
-              : response,
-        },
-        type: `useModel:${modelKey}`,
-      });
+          type: `useModel:${modelKey}`,
+        });
+      }
       return response as R;
     } catch (error: any) {
       throw error;
@@ -1371,24 +1374,32 @@ export class AgentRuntime implements IAgentRuntime {
     try {
       const model = this.getModel(ModelType.TEXT_EMBEDDING);
       if (!model) {
-        throw new Error(
-          `[AgentRuntime][${this.character.name}] No TEXT_EMBEDDING model registered`
+        // If no embedding model is registered, there's nothing to do.
+        // This allows the system to run without embedding capabilities.
+        this.logger.warn(
+          `[AgentRuntime][${this.character.name}] No TEXT_EMBEDDING model registered. Skipping embedding dimension check.`
         );
+        return;
       }
 
       this.logger.debug(`[AgentRuntime][${this.character.name}] Getting embedding dimensions`);
       const embedding = await this.useModel(ModelType.TEXT_EMBEDDING, null);
-      if (!embedding || !embedding.length) {
-        throw new Error(`[AgentRuntime][${this.character.name}] Invalid embedding received`);
-      }
 
-      this.logger.debug(
-        `[AgentRuntime][${this.character.name}] Setting embedding dimension: ${embedding.length}`
-      );
-      await this.adapter.ensureEmbeddingDimension(embedding.length);
-      this.logger.debug(
-        `[AgentRuntime][${this.character.name}] Successfully set embedding dimension`
-      );
+      // It's valid for a provider to return null or an empty array for the dimension check.
+      // We only proceed if we get a valid embedding array with content.
+      if (embedding && Array.isArray(embedding) && embedding.length > 0) {
+        this.logger.debug(
+          `[AgentRuntime][${this.character.name}] Setting embedding dimension: ${embedding.length}`
+        );
+        await this.adapter.ensureEmbeddingDimension(embedding.length);
+        this.logger.debug(
+          `[AgentRuntime][${this.character.name}] Successfully set embedding dimension`
+        );
+      } else {
+        this.logger.warn(
+          `[AgentRuntime][${this.character.name}] Embedding model did not return a valid dimension array. This may be expected.`
+        );
+      }
     } catch (error) {
       this.logger.debug(
         `[AgentRuntime][${this.character.name}] Error in ensureEmbeddingDimension:`,

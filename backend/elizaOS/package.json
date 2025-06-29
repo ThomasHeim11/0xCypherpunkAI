@@ -1,7 +1,7 @@
 {
   "name": "eliza",
   "version": "1.0.12",
-  "main": "packages/server/src/index.ts",
+  "main": "packages/server/dist/index.js",
   "module": "index.ts",
   "type": "module",
   "engines": {
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "postinstall": "bash ./scripts/init-submodules.sh",
-    "start": "turbo run start --filter=./packages/cli --log-prefix=none",
+    "start": "turbo run build --filter=@elizaos/cli --no-cache --output-logs=new-only || true && node packages/cli/dist/index.js start",
     "start:debug": "cross-env NODE_NO_WARNINGS=1 LOG_LEVEL=debug elizaos start",
     "start:app": "turbo run start --filter=./packages/app",
     "dev": "bun run --watch src/index.ts",

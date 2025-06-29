@@ -8,7 +8,6 @@ const baseCharacter: Character = {
   name: 'Eliza',
   plugins: [
     '@elizaos/plugin-sql',
-    '@elizaos/plugin-openai',
     '@elizaos/plugin-anthropic',
     '@elizaos/plugin-local-ai',
     '@elizaos/plugin-bootstrap',
@@ -198,10 +197,7 @@ export function getElizaCharacter(): Character {
   const plugins = [
     '@elizaos/plugin-sql',
     ...(process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-anthropic'] : []),
-    ...(process.env.OPENAI_API_KEY ? ['@elizaos/plugin-openai'] : []),
-    ...(!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY
-      ? ['@elizaos/plugin-local-ai']
-      : []),
+    ...(!process.env.ANTHROPIC_API_KEY ? ['@elizaos/plugin-local-ai'] : []),
     ...(!process.env.IGNORE_BOOTSTRAP ? ['@elizaos/plugin-bootstrap'] : []),
   ];
 
